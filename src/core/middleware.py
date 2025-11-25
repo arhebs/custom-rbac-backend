@@ -6,6 +6,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from rest_framework import status
+from rest_framework.exceptions import AuthenticationFailed
 
 from authentication.models import User
 from authentication.services import TokenService, BlocklistUnavailable
@@ -39,11 +40,10 @@ class JWTAuthMiddleware(MiddlewareMixin):
             request.user = user
             return None
 
+        except AuthenticationFailed:
+            return _unauthorized()
         except BlocklistUnavailable:
             return _service_unavailable()
-        except Exception as exc:
-            # Any decoding/auth failure should be treated as 401 to avoid leaking details.
-            return _unauthorized()
 
     @staticmethod
     def _get_user(user_id: Optional[str]) -> Optional[User]:

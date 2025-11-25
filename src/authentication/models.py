@@ -33,7 +33,7 @@ class User(AbstractBaseUser):
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS: ClassVar[list[str]] = []
 
-    objects = UserManager()
+    objects: ClassVar[UserManager] = UserManager()
 
     class Meta:
         """Default ordering shows newest users first."""
