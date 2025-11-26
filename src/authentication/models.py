@@ -1,8 +1,13 @@
 """Custom User model using bcrypt-hashed passwords and RBAC role linkage.
 
-Note: We intentionally avoid Django's built-in groups/permissions (no
-PermissionsMixin) to comply with the project requirement to implement RBAC
-exclusively via our own Role/AccessRule tables.
+Note:
+- We intentionally avoid Django's built-in groups/permissions (no PermissionsMixin)
+  to comply with the project requirement to implement RBAC exclusively via our own
+  Role/AccessRule tables.
+- ``AbstractBaseUser`` still contributes a ``password`` field that Django expects
+  for admin/auth integration, but **all real authentication** in this project uses
+  the bcrypt hash stored in ``password_hash``. The ``password`` field is never
+  used for login or verification.
 """
 
 import uuid
