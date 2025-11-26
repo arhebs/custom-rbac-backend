@@ -4,6 +4,11 @@ services:
   db:
     image: postgres:15-alpine
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-custom_rbac}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-custom_rbac}
       POSTGRES_USER: ${POSTGRES_USER:-custom_rbac}
@@ -16,24 +21,34 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     ports:
       - "6380:6379"
 
   app:
     build: .
-    command: python src/manage.py runserver 0.0.0.0:8000
+    command: >
+      sh -c "
+        python src/manage.py migrate &&
+        python src/manage.py runserver 0.0.0.0:8000
+      "
     volumes:
       - .:/app
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-custom_rbac}:${POSTGRES_PASSWORD:-custom_rbac}@db:5432/${POSTGRES_DB:-custom_rbac}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       SECRET_KEY: ${SECRET_KEY:-change-me}
       ALLOW_SUPERUSER_BYPASS: ${ALLOW_SUPERUSER_BYPASS:-False}
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
 
