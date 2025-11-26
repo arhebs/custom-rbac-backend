@@ -19,7 +19,9 @@ class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
     repeat_password = serializers.CharField(write_only=True, min_length=8)
-    first_name = serializers.CharField(required=False, allow_blank=True)
+    # In the original Russian task, "имя" (first name) is required, while
+    # фамилия/отчество (last name/patronymic) are optional.
+    first_name = serializers.CharField(required=True, allow_blank=False)
     last_name = serializers.CharField(required=False, allow_blank=True)
     patronymic = serializers.CharField(required=False, allow_blank=True)
 
@@ -99,3 +101,14 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         model = User
         fields = ["first_name", "last_name", "patronymic"]
         extra_kwargs = {field: {"required": False, "allow_blank": True} for field in fields}
+
+    def validate(self, attrs):
+        """Disallow attempts to change email via this endpoint.
+
+        Any payload that includes an 'email' field should be rejected with a
+        validation error rather than silently ignored, to make the restriction
+        explicit to API consumers.
+        """
+        if "email" in getattr(self, "initial_data", {}):
+            raise serializers.ValidationError("Email cannot be updated via this endpoint")
+        return super().validate(attrs)

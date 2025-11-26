@@ -61,6 +61,13 @@ class RefreshView(BaseAPIView):
         if not user:
             raise AuthenticationFailed("User not found or inactive")
 
+        # Ensure the refresh token was issued for the current token_version of
+        # the user. If the user has called logout-all since this token was
+        # minted, the version will not match and the token should be rejected.
+        token_ver = payload.get("ver")
+        if token_ver is None or token_ver != getattr(user, "token_version", 1):
+            raise AuthenticationFailed("Invalid or revoked refresh token")
+
         access, new_refresh = TokenService.generate_tokens(user)
         return api_response({"access": access, "refresh": new_refresh})
 
@@ -78,6 +85,32 @@ class LogoutView(APIView):
         payload = TokenService.decode_token(token, expected_type="access")
         TokenService.block_token(payload["jti"], payload["exp"])
         # 204 responses must not include a body.
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LogoutAllView(APIView):
+    """Invalidate all existing tokens for the current user across devices."""
+
+    # noinspection PyMethodMayBeStatic
+    def post(self, request):
+        """Increment token_version and blocklist the current access token."""
+        if not request.user.is_authenticated:
+            raise AuthenticationFailed("Authentication required")
+
+        # Bump the per-user token version so that all tokens (access and refresh)
+        # issued before this point become invalid.
+        user = request.user
+        current_version = getattr(user, "token_version", 1) or 1
+        user.token_version = current_version + 1
+        user.save(update_fields=["token_version"])
+
+        # Optionally blocklist the current access token so it is unusable even
+        # if an attacker captures it after this call.
+        token = _get_bearer_token(request)
+        if token:
+            payload = TokenService.decode_token(token, expected_type="access")
+            TokenService.block_token(payload["jti"], payload["exp"])
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

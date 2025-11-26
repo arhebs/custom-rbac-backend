@@ -34,7 +34,7 @@ blocklisting and soft-delete behavior.
 ## Data Model (simplified)
 
 - `Role(id, name, description)`
-- `User(id, email, password_hash, first_name, last_name, patronymic, role_id, is_active)`
+- `User(id, email, password_hash, first_name, last_name, patronymic, role_id, is_active, token_version)`
 - `BusinessElement(id, key)` — identifiers like `article`, `access_rule`, `user`
 - `AccessRule(id, role_id, element_id, can_read_own/all, can_create, can_update_own/all, can_delete_own/all)` (unique
   per role+element)
@@ -49,20 +49,33 @@ blocklisting and soft-delete behavior.
   "exp": <unix expiry>,
   "iat": <unix issued_at>,
   "role": <role name>,
-  "type": "access" | "refresh"
+  "type": "access" | "refresh",
+  "ver": <user_token_version>
 }
 ```
 
 - Access tokens expire ~15 minutes; refresh tokens are longer (~24h).
 - `type` must match endpoint expectations (`access` for protected routes, `refresh` for /auth/refresh).
+- `ver` is a per-user token version; only tokens whose `ver` matches the current `User.token_version` are accepted. This
+  enables "logout from all devices" by bumping the user's token_version.
 
 ## Auth & Token Lifecycle
 
 - Login issues access + refresh tokens.
 - Middleware decodes access tokens, checks Redis blocklist, and ensures user is active.
 - Logout blocklists the current access token only (refresh relies on signature/exp/type and active user).
+- Logout-all (`POST /auth/logout-all/`) increments the user's `token_version` and blocklists the current access token.
+  All previously issued access and refresh tokens (with the old `ver`) are rejected on subsequent use.
 - Soft delete (`DELETE /auth/me/`) sets `is_active=False` and blocklists the current access token. Inactive users cannot
   log in or refresh.
+
+## Password Hashing
+
+- Passwords are hashed with `bcrypt` into `User.password_hash`.
+- Each call to the hasher uses a fresh `bcrypt.gensalt()`, so the same password hashed twice will produce different
+  hashes (unique salt per hash).
+- Verification uses `bcrypt.checkpw(raw_password, stored_hash)`, which extracts the salt and cost from the stored hash
+  and recomputes the hash for comparison. The non-deterministic hashes are expected and do not affect correctness.
 
 ## Response Envelope
 

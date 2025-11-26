@@ -48,6 +48,8 @@ class TokenService:
             # does not require ``role`` to exist on AbstractBaseUser.
             "role": getattr(getattr(user, "role", None), "name", None),
             "type": token_type,
+            # Per-user token version to support "logout from all devices".
+            "ver": getattr(user, "token_version", 1),
         }
 
     @classmethod

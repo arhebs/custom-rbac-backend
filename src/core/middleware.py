@@ -37,6 +37,12 @@ class JWTAuthMiddleware(MiddlewareMixin):
             if not user or not user.is_active:
                 return _unauthorized()
 
+            # Reject tokens issued before the latest logout-all for this user by
+            # comparing the embedded token version with the current user field.
+            token_ver = payload.get("ver")
+            if token_ver is None or token_ver != getattr(user, "token_version", 1):
+                return _unauthorized()
+
             # Ensure both Django's auth middleware cache and the request attribute
             # reflect the JWT-authenticated user.
             request.user = user
