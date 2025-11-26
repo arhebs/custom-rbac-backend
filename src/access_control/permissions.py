@@ -1,16 +1,27 @@
 """Custom RBAC permission class mapping HTTP methods to AccessRule flags."""
 
+from django.conf import settings
 from rest_framework import permissions
 
 from .models import AccessRule
 
 
 class RBACPermission(permissions.BasePermission):
-    """Check access based on AccessRule for the view's business_element."""
+    """Check access based on AccessRule for the view's business_element.
+
+    If ``settings.ALLOW_SUPERUSER_BYPASS`` is True and the authenticated user is
+    a Django superuser, all permission checks are short-circuited to allow the
+    request. By default this flag is False and superusers are subject to the
+    same RBAC rules as regular users.
+    """
 
     message = "You do not have permission to perform this action on this resource."
 
     def has_permission(self, request, view) -> bool:
+        # Optional superuser bypass controlled by settings.ALLOW_SUPERUSER_BYPASS.
+        if self._has_superuser_bypass(request):
+            return True
+
         element_key = getattr(view, "business_element", None)
         if not element_key:
             return False
@@ -33,6 +44,11 @@ class RBACPermission(permissions.BasePermission):
         return False
 
     def has_object_permission(self, request, view, obj) -> bool:
+        # Apply the same bypass at object level so superusers aren't blocked
+        # by per-object "own vs all" checks when bypass is enabled.
+        if self._has_superuser_bypass(request):
+            return True
+
         element_key = getattr(view, "business_element", None)
         if not element_key:
             return False
@@ -53,6 +69,18 @@ class RBACPermission(permissions.BasePermission):
     def _is_owner(obj, request) -> bool:
         owner = getattr(obj, "owner", None)
         return bool(owner and owner == request.user)
+
+    @staticmethod
+    def _has_superuser_bypass(request) -> bool:
+        """Return True if superuser bypass is enabled and the user is a superuser."""
+
+        user = getattr(request, "user", None)
+        return (
+                user is not None
+                and getattr(user, "is_authenticated", False)
+                and getattr(settings, "ALLOW_SUPERUSER_BYPASS", False)
+                and getattr(user, "is_superuser", False)
+        )
 
     @staticmethod
     def _get_rule(role_id, element_key):
