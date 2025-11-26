@@ -5,10 +5,11 @@ from typing import Any
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from rest_framework import status
-from rest_framework.views import APIView
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from core.response import api_response, BaseAPIView
+from core.response import BaseAPIView, api_response
 from .serializers import (
     LoginSerializer,
     ProfileUpdateSerializer,
@@ -69,17 +70,20 @@ class LogoutView(APIView):
 
     # noinspection PyMethodMayBeStatic
     def post(self, request):
-        """Blocklist the bearer access token and return 204."""
+        """Blocklist the bearer access token and return 204 No Content."""
         token = _get_bearer_token(request)
         if not token:
             return JsonResponse({"data": None, "errors": ["Missing token."]}, status=401)
 
         payload = TokenService.decode_token(token, expected_type="access")
         TokenService.block_token(payload["jti"], payload["exp"])
-        return JsonResponse({}, status=status.HTTP_204_NO_CONTENT)
+        # 204 responses must not include a body.
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class MeView(BaseAPIView):
+    permission_classes: list[Any] = []
+
     # noinspection PyMethodMayBeStatic
     def get(self, request):
         """Return the current user's profile."""
@@ -108,7 +112,8 @@ class MeView(BaseAPIView):
             TokenService.block_token(payload["jti"], payload["exp"])
         request.user.is_active = False
         request.user.save(update_fields=["is_active"])
-        return JsonResponse({}, status=status.HTTP_204_NO_CONTENT)
+        # 204 responses must not include a body.
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 def _get_active_user(user_id) -> User | None:
