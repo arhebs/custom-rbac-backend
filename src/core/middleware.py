@@ -37,7 +37,10 @@ class JWTAuthMiddleware(MiddlewareMixin):
             if not user or not user.is_active:
                 return _unauthorized()
 
+            # Ensure both Django's auth middleware cache and the request attribute
+            # reflect the JWT-authenticated user.
             request.user = user
+            setattr(request, "_cached_user", user)
             return None
 
         except AuthenticationFailed:

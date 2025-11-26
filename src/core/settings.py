@@ -128,10 +128,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "authentication.User"
 
 ALLOW_SUPERUSER_BYPASS = _get_env("ALLOW_SUPERUSER_BYPASS", "False") == "True"
+DEBUG_AUTH_ERRORS = _get_env("DEBUG_AUTH_ERRORS", "False") == "True"
 REDIS_URL = _get_env("REDIS_URL", "redis://localhost:6380/0")
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["core.authentication.MiddlewareUserAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": [],
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
