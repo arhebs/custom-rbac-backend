@@ -140,6 +140,11 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Custom RBAC API",
+    "DESCRIPTION": (
+        "OpenAPI schema for the Custom Authentication & Authorization backend "
+        "with JWT + refresh tokens, Redis blocklist, and database-backed RBAC."
+    ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "SERVE_PUBLIC": True,
 }
