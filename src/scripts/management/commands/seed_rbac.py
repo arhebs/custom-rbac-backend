@@ -11,16 +11,58 @@ from authentication.managers import UserManager
 class Command(BaseCommand):
     """Management command to seed roles, rules, and sample data."""
 
-    help = "Seed RBAC roles, business elements, rules, and sample users/articles."
+    help = (
+        "Seed RBAC roles, business elements, rules, and sample users/articles. "
+        "Use --reset to clear previously seeded data first."
+    )
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--reset",
+            action="store_true",
+            help=(
+                "Clear seeded RBAC roles/elements/rules and demo users/articles "
+                "before running the seeder."
+            ),
+        )
 
     def handle(self, *args, **options):
         """Entrypoint for the management command."""
+        if options.get("reset"):
+            self._reset_seeded_data()
+
         self.stdout.write("Seeding RBAC data...")
         roles = self._create_roles()
         elements = self._create_elements()
         self._create_rules(roles, elements)
         self._create_sample_users_and_articles(roles)
         self.stdout.write(self.style.SUCCESS("RBAC seed completed."))
+
+    def _reset_seeded_data(self) -> None:
+        """Remove previously seeded RBAC infra and demo data.
+
+        This is intentionally conservative: it only removes the three base roles
+        (Admin/User/Guest), the three base business elements (article/access_rule/user),
+        their associated AccessRule rows, and the demo users/articles created by
+        this command.
+        """
+        self.stdout.write("Resetting previously seeded RBAC data...")
+
+        User = get_user_model()
+
+        # Delete demo users (their articles will be cascaded via FK).
+        demo_emails = ["admin@example.com", "user@example.com", "guest@example.com"]
+        User.objects.filter(email__in=demo_emails).delete()
+
+        # Clear access rules for the base roles/elements.
+        AccessRule.objects.filter(role__name__in=["Admin", "User", "Guest"]).delete()
+        AccessRule.objects.filter(element__key__in=["article", "access_rule", "user"]).delete()
+
+        # Remove the base roles and business elements themselves.
+        Role.objects.filter(name__in=["Admin", "User", "Guest"]).delete()
+        BusinessElement.objects.filter(key__in=["article", "access_rule", "user"]).delete()
+
+        self.stdout.write(self.style.WARNING("Seeded RBAC data cleared."))
 
     @staticmethod
     def _create_roles():
