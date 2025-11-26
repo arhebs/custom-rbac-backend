@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -29,6 +31,8 @@ def _parse_database_url(url: str) -> dict:
 
 SECRET_KEY = _get_env("SECRET_KEY", "dev-secret-key-change-me")
 DEBUG = _get_env("DEBUG", "True") == "True"
+if not DEBUG and SECRET_KEY in ("change-me", "dev-secret-key-change-me"):
+    raise ImproperlyConfigured("SECRET_KEY must be set in production")
 ALLOWED_HOSTS = [
     h.strip()
     for h in _get_env("ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0").split(",")
@@ -147,4 +151,15 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SERVE_PUBLIC": True,
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+    },
+    # Apply JWT bearer auth by default to operations unless overridden.
+    "SECURITY": [{"bearerAuth": []}],
 }
