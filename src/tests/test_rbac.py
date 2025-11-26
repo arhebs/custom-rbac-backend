@@ -171,3 +171,84 @@ class RBACArticleTests(TestCase):
 
         response = client.get("/articles/")
         self.assertEqual(response.status_code, 401)
+
+
+class AccessRuleApiTests(TestCase):
+    """Tests for AccessRule admin API behavior."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Patch Redis clients to use in-memory fake for access rule tests."""
+        super().setUpClass()
+        cls.fake_redis = FakeRedis()
+        cls.patchers = [
+            mock.patch("core.redis_client.get_redis_client", return_value=cls.fake_redis),
+            mock.patch("authentication.services.get_redis_client", return_value=cls.fake_redis),
+        ]
+        for patcher in cls.patchers:
+            patcher.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Stop Redis patches after access rule tests complete."""
+        for patcher in cls.patchers:
+            patcher.stop()
+        super().tearDownClass()
+
+    @classmethod
+    def setUpTestData(cls):
+        """Seed base RBAC infra and an admin user for API tests."""
+        cls.roles, cls.elements = seed_rbac_basics()
+        cls.admin_password = "AdminPass123"
+        cls.admin = create_user(
+            "admin_access_rule@test.com",
+            cls.admin_password,
+            cls.roles["Admin"],
+            first_name="Admin",
+            is_superuser=True,
+            is_staff=True,
+        )
+
+    def setUp(self):
+        """Authenticate as admin for each test."""
+        self.api_client: APIClient = APIClient()
+        login = self.api_client.post(
+            "/auth/login/",
+            {"email": self.admin.email, "password": self.admin_password},
+            format="json",
+        ).json()
+        access = login["data"]["access"]
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+    def test_duplicate_role_element_access_rule_is_rejected(self):
+        """Creating an AccessRule with duplicate (role, element) via API returns 400."""
+        # The seed_rbac_basics helper already created a rule for (User, article).
+        # Attempting to create it again via the API must be rejected.
+        payload = {
+            "role": "User",
+            "element": "article",
+            "can_read_own": True,
+            "can_read_all": False,
+            "can_create": True,
+            "can_update_own": True,
+            "can_update_all": False,
+            "can_delete_own": True,
+            "can_delete_all": False,
+        }
+        response = self.api_client.post("/access-rules/", payload, format="json")
+        body = response.json()
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIsNone(body["data"])
+        self.assertTrue(body["errors"])
+
+    def test_missing_authorization_header_returns_401(self):
+        """Requests without Authorization header on protected endpoints yield 401.
+
+        This matches the requirement that if the logged-in user cannot be
+        determined from the incoming request, the API must return 401 rather
+        than 403.
+        """
+        client = APIClient()
+        response = client.get("/articles/")
+        self.assertEqual(response.status_code, 401)

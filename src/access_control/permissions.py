@@ -1,7 +1,9 @@
 """Custom RBAC permission class mapping HTTP methods to AccessRule flags."""
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from rest_framework import permissions
+from rest_framework.exceptions import AuthenticationFailed
 
 from .models import AccessRule
 
@@ -24,11 +26,17 @@ class RBACPermission(permissions.BasePermission):
 
         element_key = getattr(view, "business_element", None)
         if not element_key:
-            return False
+            raise ImproperlyConfigured(
+                f"{view.__class__.__name__} uses RBACPermission but does not "
+                f"define a 'business_element' attribute."
+            )
 
         user = getattr(request, "user", None)
         if not user or not getattr(user, "is_authenticated", False):
-            return False
+            # Per spec: if we cannot determine a logged-in user for the request,
+            # this is an authentication problem, not an authorization one.
+            # Raising AuthenticationFailed ensures a 401 response instead of 403.
+            raise AuthenticationFailed("Authentication required")
 
         rule = self._get_rule(user, element_key)
         if not rule:
@@ -53,7 +61,10 @@ class RBACPermission(permissions.BasePermission):
         user = getattr(request, "user", None)
         element_key = getattr(view, "business_element", None)
         if not element_key:
-            return False
+            raise ImproperlyConfigured(
+                f"{view.__class__.__name__} uses RBACPermission but does not "
+                f"define a 'business_element' attribute."
+            )
 
         rule = self._get_rule(user, element_key)
         if not rule:
