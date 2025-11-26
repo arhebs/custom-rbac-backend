@@ -44,7 +44,9 @@ class TokenService:
             "jti": str(uuid.uuid4()),
             "exp": int(exp.timestamp()),
             "iat": int(issued_at.timestamp()),
-            "role": getattr(user.role, "name", None),
+            # Access the role name via getattr chaining so static analysis
+            # does not require ``role`` to exist on AbstractBaseUser.
+            "role": getattr(getattr(user, "role", None), "name", None),
             "type": token_type,
         }
 

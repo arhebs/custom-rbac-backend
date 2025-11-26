@@ -11,7 +11,7 @@ class RBACPermission(permissions.BasePermission):
 
     If ``settings.ALLOW_SUPERUSER_BYPASS`` is True and the authenticated user is
     a Django superuser, all permission checks are short-circuited to allow the
-    request. By default this flag is False and superusers are subject to the
+    request. By default, this flag is False and superusers are subject to the
     same RBAC rules as regular users.
     """
 
@@ -26,10 +26,11 @@ class RBACPermission(permissions.BasePermission):
         if not element_key:
             return False
 
-        if not request.user or not request.user.is_authenticated:
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return False
 
-        rule = self._get_rule(request.user.role_id, element_key)
+        rule = self._get_rule(user, element_key)
         if not rule:
             return False
 
@@ -49,11 +50,12 @@ class RBACPermission(permissions.BasePermission):
         if self._has_superuser_bypass(request):
             return True
 
+        user = getattr(request, "user", None)
         element_key = getattr(view, "business_element", None)
         if not element_key:
             return False
 
-        rule = self._get_rule(request.user.role_id, element_key)
+        rule = self._get_rule(user, element_key)
         if not rule:
             return False
 
@@ -83,10 +85,19 @@ class RBACPermission(permissions.BasePermission):
         )
 
     @staticmethod
-    def _get_rule(role_id, element_key):
+    def _get_rule(user, element_key):
+        """Fetch the AccessRule for the given user and business element.
+
+        Uses getattr to avoid static-analysis issues when the concrete User
+        model adds a ``role`` FK that the generic AbstractBaseUser type
+        does not declare.
+        """
+        role = getattr(user, "role", None)
+        if role is None:
+            return None
         try:
             return AccessRule.objects.select_related("role", "element").get(
-                role_id=role_id, element__key=element_key
+                role=role, element__key=element_key
             )
         except AccessRule.DoesNotExist:
             return None
