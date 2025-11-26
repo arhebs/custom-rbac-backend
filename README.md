@@ -31,6 +31,21 @@ blocklisting and soft-delete behavior.
 - Raw schema: `/schema/`
 - Swagger UI: `/schema/swagger-ui/`
 
+## Endpoints Overview
+
+- Auth:
+    - `POST /auth/register/`
+    - `POST /auth/login/`
+    - `POST /auth/refresh/`
+    - `POST /auth/logout/`
+    - `POST /auth/logout-all/`
+    - `GET/PATCH/DELETE /auth/me/`
+- Business resources:
+    - `GET/POST /articles/`
+    - `GET/PATCH/PUT/DELETE /articles/{id}/`
+    - `GET/POST /access-rules/`
+    - `GET/PATCH/PUT/DELETE /access-rules/{id}/`
+
 ## Data Model (simplified)
 
 - `Role(id, name, description)`
@@ -58,6 +73,12 @@ blocklisting and soft-delete behavior.
 - `type` must match endpoint expectations (`access` for protected routes, `refresh` for /auth/refresh).
 - `ver` is a per-user token version; only tokens whose `ver` matches the current `User.token_version` are accepted. This
   enables "logout from all devices" by bumping the user's token_version.
+
+> Design choice: this implementation intentionally uses **JWT access + refresh tokens over Bearer Authorization headers
+**
+> with a **Redis-backed blocklist**, rather than a session + cookie + `sessions` table approach suggested as an
+> alternative in the original assignment text. The goal is to explicitly demonstrate stateless auth, token payload
+> design, and token revocation mechanics.
 
 ## Auth & Token Lifecycle
 
@@ -106,6 +127,20 @@ All non-204 responses use:
 
 Creates roles (Admin, User, Guest), business elements (`article`, `access_rule`, `user`), access rules (admin full; user
 owns articles; guest read-only as configured), sample users, and sample articles.
+
+## Manual QA Walkthrough
+
+For an end-to-end sanity check against the live Dockerized stack, use the helper script:
+
+- `./qa_walkthrough.sh`
+
+It will:
+
+- Build and start the Docker Compose stack.
+- Wait for the API to become available.
+- Run migrations and `seed_rbac`.
+- Exercise key flows (auth, token lifecycle, RBAC on `/articles/`, and `/access-rules/`) and fail fast on any
+  unexpected HTTP status.
 
 ## Testing
 
